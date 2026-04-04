@@ -34,6 +34,7 @@
     var waterTemp = document.getElementById('water-temp');
     var slipWarn = document.getElementById('slip-warn');
     var fuelLapsEl = document.getElementById('fuel-laps');
+    var pitStrategyEl = document.getElementById('pit-strategy');
 
     // G-force canvas
     var gfCanvas = document.getElementById('gforce');
@@ -650,6 +651,34 @@
                 lastSectorCount = totalSectors;
                 renderSectorTable(cachedAllLaps, c.cur_sectors);
             }
+        }
+
+        // Pit strategy
+        if (d.coach && d.coach.pit) {
+            var pit = d.coach.pit;
+            var pitHtml = '';
+
+            if (pit.fuel_per_lap > 0) {
+                pitHtml += '<span class="pit-label">PIT STRATEGY</span><br>';
+                pitHtml += '<span class="pit-fuel">\u26FD ' + pit.fuel_laps_left.toFixed(1) + ' laps</span>';
+
+                if (pit.tire_laps_left > 0 && pit.tire_laps_left < 99) {
+                    pitHtml += ' <span class="pit-tires">\u25CE ' + pit.tire_laps_left.toFixed(1) + ' laps</span>';
+                }
+
+                if (pit.pit_lap > 0) {
+                    var lapsUntilPit = pit.pit_lap - d.lap;
+                    var urgentClass = lapsUntilPit <= 2 ? ' urgent' : '';
+                    pitHtml += '<br><span class="pit-lap' + urgentClass + '">PIT LAP ' + pit.pit_lap + '</span>';
+                    if (pit.limiting) {
+                        pitHtml += ' <span style="color:#666;font-size:9px">(' + pit.limiting + ')</span>';
+                    }
+                } else if (pit.fuel_laps_left > 0) {
+                    pitHtml += '<br><span class="pit-ok">NO PIT NEEDED</span>';
+                }
+            }
+
+            pitStrategyEl.innerHTML = pitHtml;
         }
 
         // Track map data

@@ -564,6 +564,39 @@ body {
 
 .fuel-laps.critical { color: #ff4444; font-weight: 700; }
 
+/* Pit strategy */
+.pit-strategy {
+    font-size: 11px;
+    color: #888;
+    line-height: 1.5;
+}
+
+.pit-strategy .pit-label {
+    color: #666;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.pit-strategy .pit-fuel { color: #ffaa00; }
+.pit-strategy .pit-tires { color: #66ccff; }
+
+.pit-strategy .pit-lap {
+    font-size: 14px;
+    font-weight: 700;
+    color: #cc44ff;
+}
+
+.pit-strategy .pit-lap.urgent {
+    color: #ff4444;
+    animation: flash 0.5s infinite alternate;
+}
+
+.pit-strategy .pit-ok {
+    color: #00ff88;
+    font-weight: 600;
+}
+
 /* Sector table */
 .sector-table {
     flex: 1;

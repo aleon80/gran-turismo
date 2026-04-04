@@ -32,7 +32,6 @@ MAX_TRACK_POINTS = 3000
 last_track_lap = -1
 coach = DrivingCoach()
 prev_vel = None  # for G-force calc
-prev_fuel_per_lap = []  # for fuel prediction
 
 
 class GT7Protocol(asyncio.DatagramProtocol):
@@ -93,17 +92,12 @@ class GT7Protocol(asyncio.DatagramProtocol):
             parsed['lockup'] = lockup
             parsed['wheelspin'] = wheelspin
 
-            # Fuel prediction
-            fuel_laps = 0
             coach_data = coach.on_telemetry(parsed)
-            if coach_data.get('all_laps') and parsed.get('fuel_level', 0) > 0:
-                laps_done = len(coach_data['all_laps'])
-                if laps_done > 0 and parsed.get('fuel_capacity', 0) > 0:
-                    fuel_used = parsed['fuel_capacity'] - parsed['fuel_level']
-                    if fuel_used > 0:
-                        fuel_per_lap = fuel_used / laps_done
-                        fuel_laps = parsed['fuel_level'] / fuel_per_lap
-                        parsed['fuel_laps'] = round(fuel_laps, 1)
+
+            # Fuel laps from pit strategy (replaces old simple calc)
+            pit = coach_data.get('pit')
+            if pit and pit.get('fuel_laps_left', 0) > 0:
+                parsed['fuel_laps'] = pit['fuel_laps_left']
 
             parsed['coach'] = coach_data
             latest_data = parsed

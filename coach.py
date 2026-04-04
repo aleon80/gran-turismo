@@ -294,6 +294,125 @@ def _build_shift_points(samples):
     return shifts
 
 
+class PitStrategy:
+    """Tracks fuel and tire wear per lap, estimates when to pit."""
+
+    # Tire temp thresholds
+    TIRE_OPTIMAL_MAX = 90.0   # above this = wearing faster
+    TIRE_CRITICAL = 120.0     # above this = tires are gone
+    TIRE_LIFE_DEFAULT = 99    # default if no degradation detected
+
+    def __init__(self):
+        self.lap_fuel = []         # [(lap_num, fuel_used)] per completed lap
+        self.lap_tire_temps = []   # [(lap_num, avg_temp)] per completed lap
+        self.fuel_at_lap_start = 0.0
+        self.tire_temp_samples = []  # temps collected during current lap
+        self.total_laps = 0        # race total laps (0 = unlimited)
+
+    def on_lap_start(self, fuel_level: float, total_laps: int):
+        """Called when a new lap begins."""
+        self.fuel_at_lap_start = fuel_level
+        self.tire_temp_samples = []
+        self.total_laps = total_laps
+
+    def on_telemetry(self, data: dict):
+        """Feed telemetry each frame to collect tire temp samples."""
+        temps = [
+            data.get('tire_fl', 0), data.get('tire_fr', 0),
+            data.get('tire_rl', 0), data.get('tire_rr', 0),
+        ]
+        avg = sum(temps) / 4
+        if avg > 10:  # ignore zeros / not moving
+            self.tire_temp_samples.append(avg)
+
+    def on_lap_finish(self, lap_num: int, fuel_level: float):
+        """Called when a lap completes. Records fuel used and avg tire temp."""
+        if self.fuel_at_lap_start > 0 and fuel_level >= 0:
+            fuel_used = self.fuel_at_lap_start - fuel_level
+            if fuel_used > 0:
+                self.lap_fuel.append((lap_num, fuel_used))
+                # Keep last 10 laps for averaging
+                if len(self.lap_fuel) > 10:
+                    self.lap_fuel = self.lap_fuel[-10:]
+
+        if self.tire_temp_samples:
+            avg_temp = sum(self.tire_temp_samples) / len(self.tire_temp_samples)
+            self.lap_tire_temps.append((lap_num, avg_temp))
+            if len(self.lap_tire_temps) > 10:
+                self.lap_tire_temps = self.lap_tire_temps[-10:]
+
+    def get_strategy(self, current_lap: int, fuel_level: float,
+                     fuel_capacity: float) -> dict:
+        """Calculate pit strategy. Returns dict with estimates."""
+        result = {
+            'fuel_per_lap': 0,
+            'fuel_laps_left': 0,
+            'tire_avg_temp': 0,
+            'tire_temp_trend': 0,     # deg/lap increase
+            'tire_laps_left': 0,
+            'pit_lap': 0,             # recommended pit lap (0 = no pit needed)
+            'limiting': '',           # 'fuel' or 'tires' or ''
+        }
+
+        # --- Fuel ---
+        if self.lap_fuel:
+            fuel_per_lap = sum(f for _, f in self.lap_fuel) / len(self.lap_fuel)
+            result['fuel_per_lap'] = round(fuel_per_lap, 2)
+            if fuel_per_lap > 0 and fuel_level > 0:
+                result['fuel_laps_left'] = round(fuel_level / fuel_per_lap, 1)
+
+        # --- Tires ---
+        if self.lap_tire_temps:
+            latest_temp = self.lap_tire_temps[-1][1]
+            result['tire_avg_temp'] = round(latest_temp, 1)
+
+            if len(self.lap_tire_temps) >= 2:
+                # Linear trend: temp increase per lap
+                n = len(self.lap_tire_temps)
+                temps = [t for _, t in self.lap_tire_temps]
+                # Simple slope from first to last
+                trend = (temps[-1] - temps[0]) / (n - 1)
+                result['tire_temp_trend'] = round(trend, 1)
+
+                if trend > 0.5:  # temps rising meaningfully
+                    laps_to_critical = (self.TIRE_CRITICAL - latest_temp) / trend
+                    result['tire_laps_left'] = max(0, round(laps_to_critical, 1))
+                else:
+                    result['tire_laps_left'] = self.TIRE_LIFE_DEFAULT
+            else:
+                result['tire_laps_left'] = self.TIRE_LIFE_DEFAULT
+
+        # --- Pit recommendation ---
+        fuel_laps = result['fuel_laps_left']
+        tire_laps = result['tire_laps_left']
+
+        if fuel_laps > 0 and tire_laps > 0:
+            if fuel_laps <= tire_laps:
+                result['limiting'] = 'fuel'
+                laps_left = fuel_laps
+            else:
+                result['limiting'] = 'tires'
+                laps_left = tire_laps
+
+            # Pit 1 lap before running out
+            pit_in = max(0, int(laps_left) - 1)
+            result['pit_lap'] = current_lap + pit_in
+
+            # If race has total laps and we can finish without pitting
+            if self.total_laps > 0:
+                remaining_race = self.total_laps - current_lap
+                if laps_left >= remaining_race:
+                    result['pit_lap'] = 0  # no pit needed
+        elif fuel_laps > 0:
+            result['limiting'] = 'fuel'
+            pit_in = max(0, int(fuel_laps) - 1)
+            result['pit_lap'] = current_lap + pit_in
+            if self.total_laps > 0 and fuel_laps >= (self.total_laps - current_lap):
+                result['pit_lap'] = 0
+
+        return result
+
+
 class DrivingCoach:
     """Compares current driving to a reference lap and generates tips."""
 
@@ -308,6 +427,7 @@ class DrivingCoach:
 
         self.sectors = SectorTracker()
         self.gear_limits = GearLimits()
+        self.pit_strategy = PitStrategy()
         self.lap_reports = []  # [{lap, time_ms, summary, zones}]
 
         # Tip cooldown tracking
@@ -329,6 +449,8 @@ class DrivingCoach:
             self.current_recorder = LapRecorder()
             self._last_ref_idx = 0
             self.sectors.on_lap_start(track_time)
+            self.pit_strategy.on_lap_start(
+                data.get('fuel_level', 0), data.get('total_laps', 0))
 
         # Record current lap
         self.current_recorder.add(data)
@@ -336,10 +458,17 @@ class DrivingCoach:
         # Learn gear speed limits
         self.gear_limits.on_telemetry(data)
 
+        # Pit strategy telemetry
+        self.pit_strategy.on_telemetry(data)
+
         # Track sectors
         self.sectors.on_telemetry(data, lap)
 
         # Compare to reference
+        # Pit strategy
+        pit = self.pit_strategy.get_strategy(
+            lap, data.get('fuel_level', 0), data.get('fuel_capacity', 0))
+
         coaching = {
             'has_reference': self.reference_lap is not None,
             'delta_speed': 0,
@@ -353,6 +482,7 @@ class DrivingCoach:
             'all_laps': self.sectors.get_all_laps(),
             'gear_limits': self.gear_limits.get_limits_display(),
             'lap_reports': self.lap_reports,
+            'pit': pit,
         }
 
         if self.reference_lap:
@@ -380,6 +510,10 @@ class DrivingCoach:
         self.sectors.finish_lap(self.current_lap, track_time, last_lap_ms)
 
         completed_samples = self.current_recorder.samples
+
+        # Record pit strategy data for the completed lap
+        self.pit_strategy.on_lap_finish(
+            self.current_lap, data.get('fuel_level', 0))
 
         self.completed_laps[self.current_lap] = {
             'samples': completed_samples,
