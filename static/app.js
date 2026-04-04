@@ -34,7 +34,9 @@
     var waterTemp = document.getElementById('water-temp');
     var slipWarn = document.getElementById('slip-warn');
     var fuelLapsEl = document.getElementById('fuel-laps');
-    var pitStrategyEl = document.getElementById('pit-strategy');
+    var pitInfoEl = document.getElementById('pit-info');
+    var alertPit = document.getElementById('alert-pit');
+    var pitAlertTimeout = null;
 
     // G-force canvas
     var gfCanvas = document.getElementById('gforce');
@@ -653,32 +655,34 @@
             }
         }
 
-        // Pit strategy
+        // Pit info (center column)
         if (d.coach && d.coach.pit) {
             var pit = d.coach.pit;
-            var pitHtml = '';
 
-            if (pit.fuel_per_lap > 0) {
-                pitHtml += '<span class="pit-label">PIT STRATEGY</span><br>';
-                pitHtml += '<span class="pit-fuel">\u26FD ' + pit.fuel_laps_left.toFixed(1) + ' laps</span>';
+            if (pit.fuel_per_lap > 0 && pit.pit_lap > 0) {
+                var lapsUntilPit = pit.pit_lap - d.lap;
+                pitInfoEl.innerHTML = 'PIT LAP <span class="pit-lap-num">' + pit.pit_lap + '</span>';
 
-                if (pit.tire_laps_left > 0 && pit.tire_laps_left < 99) {
-                    pitHtml += ' <span class="pit-tires">\u25CE ' + pit.tire_laps_left.toFixed(1) + ' laps</span>';
-                }
-
-                if (pit.pit_lap > 0) {
-                    var lapsUntilPit = pit.pit_lap - d.lap;
-                    var urgentClass = lapsUntilPit <= 2 ? ' urgent' : '';
-                    pitHtml += '<br><span class="pit-lap' + urgentClass + '">PIT LAP ' + pit.pit_lap + '</span>';
-                    if (pit.limiting) {
-                        pitHtml += ' <span style="color:#666;font-size:9px">(' + pit.limiting + ')</span>';
+                // Show alert when on the pit lap or 1 lap before
+                if (lapsUntilPit <= 1 && lapsUntilPit >= 0) {
+                    if (!alertPit.classList.contains('visible')) {
+                        alertPit.innerHTML = '<div class="pit-triangle">\u26A0\uFE0F</div><div class="pit-alert-text">BOX BOX BOX</div>';
+                        alertPit.classList.add('visible');
+                        dashboard.className = 'dashboard glow-pit';
+                        if (pitAlertTimeout) clearTimeout(pitAlertTimeout);
+                        pitAlertTimeout = setTimeout(function () {
+                            alertPit.classList.remove('visible');
+                            if (!alertShift.classList.contains('visible') && !alertBrake.classList.contains('visible')) {
+                                dashboard.className = 'dashboard';
+                            }
+                        }, 5000);
                     }
-                } else if (pit.fuel_laps_left > 0) {
-                    pitHtml += '<br><span class="pit-ok">NO PIT NEEDED</span>';
                 }
+            } else if (pit.fuel_per_lap > 0) {
+                pitInfoEl.innerHTML = '<span class="pit-ok">no pit needed</span>';
+            } else {
+                pitInfoEl.innerHTML = '';
             }
-
-            pitStrategyEl.innerHTML = pitHtml;
         }
 
         // Track map data

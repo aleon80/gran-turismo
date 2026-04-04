@@ -564,37 +564,61 @@ body {
 
 .fuel-laps.critical { color: #ff4444; font-weight: 700; }
 
-/* Pit strategy */
-.pit-strategy {
-    font-size: 11px;
+/* Pit info (center column, below gear limits) */
+.pit-info {
+    font-size: 13px;
     color: #888;
-    line-height: 1.5;
+    margin-top: 4px;
+    text-align: center;
+    min-height: 18px;
 }
 
-.pit-strategy .pit-label {
-    color: #666;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 1px;
-}
-
-.pit-strategy .pit-fuel { color: #ffaa00; }
-.pit-strategy .pit-tires { color: #66ccff; }
-
-.pit-strategy .pit-lap {
-    font-size: 14px;
+.pit-info .pit-lap-num {
+    color: #ffaa00;
     font-weight: 700;
-    color: #cc44ff;
 }
 
-.pit-strategy .pit-lap.urgent {
-    color: #ff4444;
-    animation: flash 0.5s infinite alternate;
+.pit-info .pit-ok {
+    color: #555;
+    font-size: 11px;
 }
 
-.pit-strategy .pit-ok {
-    color: #00ff88;
-    font-weight: 600;
+/* Pit alert overlay */
+.alert-pit {
+    top: 50%;
+    transform: translateY(-50%);
+    height: auto;
+    padding: 20px;
+    flex-direction: column;
+    gap: 8px;
+    background: radial-gradient(ellipse at center, rgba(255,140,0,0.25) 0%, transparent 70%);
+}
+
+.alert-pit.visible {
+    opacity: 1;
+}
+
+.alert-pit .pit-triangle {
+    font-size: 80px;
+    line-height: 1;
+    filter: drop-shadow(0 0 30px rgba(255,140,0,0.8));
+    animation: pit-pulse 1s ease-in-out infinite alternate;
+}
+
+.alert-pit .pit-alert-text {
+    font-size: 32px;
+    color: #ffaa00;
+    text-shadow: 0 0 20px rgba(255,140,0,0.6);
+    letter-spacing: 4px;
+}
+
+@keyframes pit-pulse {
+    from { transform: scale(1); opacity: 1; }
+    to { transform: scale(1.1); opacity: 0.6; }
+}
+
+.dashboard.glow-pit {
+    box-shadow: inset 0 0 50px rgba(255, 140, 0, 0.4);
 }
 
 /* Sector table */
