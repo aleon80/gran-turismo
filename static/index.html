@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>GT7 Telemetry</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Full-screen alerts -->
+    <div id="alert-shift" class="alert-overlay alert-shift"></div>
+    <div id="alert-brake" class="alert-overlay alert-brake"></div>
+
+    <div id="overlay" class="overlay">
+        <div class="overlay-text">Waiting for GT7 telemetry...</div>
+        <div class="overlay-sub">Make sure Gran Turismo 7 is running</div>
+    </div>
+
+    <div id="dashboard" class="dashboard hidden">
+        <!-- RPM Bar -->
+        <div class="rpm-section">
+            <div class="rpm-bar-container">
+                <div id="rpm-bar" class="rpm-bar"></div>
+            </div>
+            <div class="rpm-text">
+                <span id="rpm-val">0</span>
+                <span class="rpm-label">RPM</span>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <div class="main-section">
+            <!-- Throttle -->
+            <div class="pedal-col">
+                <div class="pedal-label">THR</div>
+                <div class="pedal-bar-container">
+                    <div id="throttle-bar" class="pedal-bar throttle"></div>
+                </div>
+                <div id="throttle-val" class="pedal-val">0%</div>
+            </div>
+
+            <!-- Speed + Gear -->
+            <div class="center-col">
+                <div id="speed" class="speed-value">0</div>
+                <div class="speed-unit">km/h</div>
+                <div class="gear-row">
+                    <div id="gear" class="gear-value">N</div>
+                    <div id="ref-gear" class="ref-gear"></div>
+                </div>
+                <div id="shift-hint" class="shift-hint"></div>
+                <div id="gear-limits" class="gear-limits"></div>
+                <div id="boost" class="boost-value"></div>
+            </div>
+
+            <!-- Brake -->
+            <div class="pedal-col">
+                <div class="pedal-label">BRK</div>
+                <div class="pedal-bar-container">
+                    <div id="brake-bar" class="pedal-bar brake"></div>
+                </div>
+                <div id="brake-val" class="pedal-val">0%</div>
+            </div>
+
+            <!-- Info panel -->
+            <div class="info-col">
+                <div class="info-block">
+                    <div class="info-label">POS</div>
+                    <div id="race-pos" class="info-value pos">-</div>
+                </div>
+                <div class="info-block">
+                    <div class="info-label">LAP</div>
+                    <div id="lap-info" class="info-value">-/-</div>
+                </div>
+                <div class="info-block">
+                    <div class="info-label">TIME</div>
+                    <div id="cur-time" class="info-value time cur-time">-:--:---</div>
+                </div>
+                <div class="info-block">
+                    <div class="info-label">BEST</div>
+                    <div id="best-lap" class="info-value time">-:--:---</div>
+                </div>
+                <div class="info-block">
+                    <div class="info-label">LAST</div>
+                    <div id="last-lap" class="info-value time">-:--:---</div>
+                </div>
+                <div class="info-block">
+                    <div class="info-label">FUEL</div>
+                    <div class="fuel-bar-container">
+                        <div id="fuel-bar" class="fuel-bar"></div>
+                    </div>
+                    <div id="fuel-val" class="info-value small">0%</div>
+                </div>
+            </div>
+
+            <!-- G-force + Track map -->
+            <div class="map-col">
+                <canvas id="gforce" width="100" height="100"></canvas>
+                <canvas id="track-map" width="200" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Coach -->
+        <div class="coach-section">
+            <div id="coach-tip" class="coach-tip"></div>
+            <div class="coach-meta">
+                <div class="delta-block">
+                    <span class="delta-label">DELTA</span>
+                    <span id="delta-time" class="delta-value">-</span>
+                </div>
+                <div class="delta-block">
+                    <span class="delta-label">SPD vs REF</span>
+                    <span id="delta-speed" class="delta-value">-</span>
+                </div>
+                <div id="coach-status" class="coach-status">Recording lap 1...</div>
+            </div>
+        </div>
+
+        <!-- Bottom: Tires + Temps + Sectors -->
+        <div class="bottom-section">
+            <div class="tire-grid">
+                <div class="tire-car">
+                    <div class="tire-row">
+                        <div id="tire-fl" class="tire">--</div>
+                        <div id="tire-fr" class="tire">--</div>
+                    </div>
+                    <div class="tire-car-body"></div>
+                    <div class="tire-row">
+                        <div id="tire-rl" class="tire">--</div>
+                        <div id="tire-rr" class="tire">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="bottom-info">
+                <div class="temps">
+                    <span class="temp-item">OIL <span id="oil-temp">--</span>&deg;</span>
+                    <span class="temp-item">H2O <span id="water-temp">--</span>&deg;</span>
+                </div>
+                <div id="slip-warn" class="slip-warn"></div>
+                <div id="fuel-laps" class="fuel-laps"></div>
+            </div>
+            <div id="sector-table" class="sector-table"></div>
+        </div>
+    </div>
+
+    <!-- Lap report overlay (tap to toggle) -->
+    <div id="lap-report" class="lap-report hidden">
+        <div class="lr-header">
+            <span class="lr-title">LAP ANALYSIS</span>
+            <span id="lr-close" class="lr-close">X</span>
+        </div>
+        <div id="lr-content" class="lr-content"></div>
+    </div>
+    <div id="lr-badge" class="lr-badge hidden">REPORT</div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
