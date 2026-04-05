@@ -1,7 +1,7 @@
 """Real-time driving coach: records laps, compares to best, generates tips."""
 
 import math
-from analyzer import analyze_lap, summarize_lap
+from analyzer import analyze_lap, summarize_lap, detect_corners
 from tracks import identify_track, register_track, save_reference_lap, load_reference_lap
 
 # Minimum distance (meters) between recorded samples along the track
@@ -481,6 +481,7 @@ class DrivingCoach:
         self.ref_throttle_pct = 0
         self.ref_speed_profile = []  # [[dist, speed], ...] downsampled
         self.ref_line = []            # [[x, z], ...] downsampled
+        self.corners = []             # [{num, x, z, min_speed}, ...]
         self._brake_history = []      # last N brake values for trail braking
         self._last_trail_brake_pos = None
         self.current_recorder = LapRecorder()
@@ -564,6 +565,7 @@ class DrivingCoach:
             'ref_throttle_pct': self.ref_throttle_pct,
             'ref_speed_profile': self.ref_speed_profile,
             'ref_line': self.ref_line,
+            'corners': self.corners,
             'trail_brake_tip': '',
         }
 
@@ -692,6 +694,9 @@ class DrivingCoach:
         self.ref_line = []
         for i in range(0, len(ref), step_line):
             self.ref_line.append([round(ref[i]['x'], 1), round(ref[i]['z'], 1)])
+
+        # Detect corners
+        self.corners = detect_corners(ref)
 
     def _find_closest_ref(self, x, z):
         """Find the closest reference sample to (x, z), searching forward."""

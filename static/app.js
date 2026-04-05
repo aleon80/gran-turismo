@@ -70,6 +70,7 @@
     var trail = [];         // stored trail from server
     var curPos = null;      // current car position [x, z]
     var refLine = [];       // reference racing line [[x, z], ...]
+    var corners = [];       // [{num, x, z, min_speed}, ...]
 
     // Speed graph
     var sgCanvas = document.getElementById('speed-graph');
@@ -473,6 +474,28 @@
             mapCtx.stroke();
         }
 
+        // Draw corner numbers
+        if (corners.length > 0) {
+            mapCtx.font = 'bold 9px sans-serif';
+            mapCtx.textAlign = 'center';
+            for (var ci = 0; ci < corners.length; ci++) {
+                var corn = corners[ci];
+                var ccx = tx(corn.x);
+                var ccz = tz(corn.z);
+                // Background circle
+                mapCtx.beginPath();
+                mapCtx.arc(ccx, ccz, 7, 0, Math.PI * 2);
+                mapCtx.fillStyle = 'rgba(20, 20, 40, 0.8)';
+                mapCtx.fill();
+                mapCtx.strokeStyle = 'rgba(150, 130, 255, 0.6)';
+                mapCtx.lineWidth = 1;
+                mapCtx.stroke();
+                // Number
+                mapCtx.fillStyle = '#aa88ff';
+                mapCtx.fillText(corn.num, ccx, ccz + 3);
+            }
+        }
+
         // Draw error zones from last lap report
         if (cachedReports.length > 0) {
             var lastReport = cachedReports[cachedReports.length - 1];
@@ -867,6 +890,7 @@
             // Cache reference data when received
             if (c.ref_line) refLine = c.ref_line;
             if (c.ref_speed_profile) refSpeedProfile = c.ref_speed_profile;
+            if (c.corners) corners = c.corners;
 
             // Throttle %
             if (c.cur_throttle_pct > 0) {

@@ -154,6 +154,7 @@ async def broadcast_loop():
             if last_packet_id % 150 != 0:
                 coach_data.pop('ref_speed_profile', None)
                 coach_data.pop('ref_line', None)
+                coach_data.pop('corners', None)
             payload['coach'] = coach_data
 
         # Send track trail every ~2 seconds

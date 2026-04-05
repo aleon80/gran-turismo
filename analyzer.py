@@ -92,6 +92,51 @@ def _zone_label(zone_idx, corners, ref_dists, num_zones, total_dist):
     return str(int(dist_at_zone)) + 'м'
 
 
+def detect_corners(ref_samples):
+    """Detect corners from reference lap. Returns list of corners for map display.
+
+    Each corner: {num, x, z, min_speed} at the apex (min speed point).
+    """
+    if not ref_samples or len(ref_samples) < 20:
+        return []
+
+    ref_dists = _cumulative_distances(ref_samples)
+    corners_map = _find_corners(ref_samples, NUM_ZONES, ref_dists)
+    if not corners_map:
+        return []
+
+    zone_size = len(ref_samples) / NUM_ZONES
+
+    # For each corner number, find the apex (min speed sample)
+    corner_nums = {}  # corner_num -> list of zone indices
+    for z, num in corners_map.items():
+        corner_nums.setdefault(num, []).append(z)
+
+    result = []
+    for num in sorted(corner_nums):
+        zones = corner_nums[num]
+        # Find min speed sample across all zones of this corner
+        best_idx = None
+        best_speed = float('inf')
+        for z in zones:
+            rs = int(z * zone_size)
+            re = int((z + 1) * zone_size)
+            for i in range(rs, min(re, len(ref_samples))):
+                if ref_samples[i]['speed'] < best_speed:
+                    best_speed = ref_samples[i]['speed']
+                    best_idx = i
+
+        if best_idx is not None:
+            result.append({
+                'num': num,
+                'x': round(ref_samples[best_idx]['x'], 1),
+                'z': round(ref_samples[best_idx]['z'], 1),
+                'min_speed': round(best_speed, 0),
+            })
+
+    return result
+
+
 def analyze_lap(lap_samples, ref_samples, ref_time_ms):
     """Compare a completed lap to reference. Returns list of zone analyses.
 
