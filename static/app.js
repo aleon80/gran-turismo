@@ -54,6 +54,8 @@
     var slipWarn = document.getElementById('slip-warn');
     var fuelLapsEl = document.getElementById('fuel-laps');
     var pitInfoEl = document.getElementById('pit-info');
+    var refSpeedEl = document.getElementById('ref-speed');
+    var brakeAheadEl = document.getElementById('brake-ahead');
     var alertPit = document.getElementById('alert-pit');
     var pitAlertTimeout = null;
 
@@ -640,6 +642,32 @@
             } else {
                 deltaSpeed.textContent = '-';
                 deltaSpeed.className = 'delta-value';
+            }
+
+            // Reference speed
+            if (c.has_reference && c.ref_speed > 0) {
+                var spdClass = 'match';
+                if (c.delta_speed > 5) spdClass = 'faster';
+                else if (c.delta_speed < -5) spdClass = 'slower';
+                refSpeedEl.innerHTML = '<span class="ref-spd-val ' + spdClass + '">' +
+                    Math.round(c.ref_speed) + '</span><span class="ref-spd-label">км/г етал.</span>';
+            } else {
+                refSpeedEl.innerHTML = '';
+            }
+
+            // Brake ahead
+            if (c.brake_ahead) {
+                var ba = c.brake_ahead;
+                var imminent = ba.dist < 50 ? ' imminent' : '';
+                if (ba.dist < 30) {
+                    brakeAheadEl.innerHTML = '<span class="brake-target">ГАЛЬМУЙ до ' + ba.target_speed + '</span>';
+                } else {
+                    brakeAheadEl.innerHTML = '<span class="brake-dist">ГАЛЬМО ' + ba.dist + 'м</span> \u2192 <span class="brake-target">' + ba.target_speed + ' км/г</span>';
+                }
+                brakeAheadEl.className = 'brake-ahead' + imminent;
+            } else {
+                brakeAheadEl.innerHTML = '';
+                brakeAheadEl.className = 'brake-ahead';
             }
 
             // Track detection

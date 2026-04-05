@@ -295,6 +295,49 @@ def _build_shift_points(samples):
     return shifts
 
 
+# Brake zone detection thresholds
+BRAKE_DETECT_THRESHOLD = 0.3   # brake > this = braking
+BRAKE_LOOKAHEAD = 40           # how many samples ahead to scan
+BRAKE_ANNOUNCE_DIST = 200      # meters - start announcing brake zone
+
+
+def _build_brake_points(samples):
+    """Pre-compute brake zones from a lap's samples.
+
+    Returns list of {idx, x, z, min_speed, brake_speed} where:
+    - idx: index where braking starts
+    - brake_speed: speed when braking begins
+    - min_speed: minimum speed in the brake zone (target corner speed)
+    """
+    brakes = []
+    i = 0
+    n = len(samples)
+    while i < n:
+        if samples[i]['brake'] > BRAKE_DETECT_THRESHOLD:
+            start_idx = i
+            brake_speed = samples[max(0, i - 1)]['speed']
+            min_speed = samples[i]['speed']
+            # Scan through brake zone
+            while i < n and (samples[i]['brake'] > 0.1 or samples[i]['speed'] < min_speed + 5):
+                if samples[i]['speed'] < min_speed:
+                    min_speed = samples[i]['speed']
+                i += 1
+                if i - start_idx > 60:  # max zone length
+                    break
+            # Only record significant brake zones (speed drop > 15 km/h)
+            if brake_speed - min_speed > 15:
+                brakes.append({
+                    'idx': start_idx,
+                    'x': samples[start_idx]['x'],
+                    'z': samples[start_idx]['z'],
+                    'brake_speed': round(brake_speed, 0),
+                    'min_speed': round(min_speed, 0),
+                })
+        else:
+            i += 1
+    return brakes
+
+
 class PitStrategy:
     """Tracks fuel and tire wear per lap, estimates when to pit."""
 
@@ -421,6 +464,7 @@ class DrivingCoach:
         self.reference_lap = None
         self.reference_time = None
         self.reference_shifts = []
+        self.reference_brakes = []
         self.current_recorder = LapRecorder()
         self.completed_laps = {}
         self.current_lap = -1
@@ -547,6 +591,7 @@ class DrivingCoach:
                     self.reference_time = ref['time_ms']
                     self.sectors.build_from_reference(self.reference_lap)
                     self.reference_shifts = _build_shift_points(self.reference_lap)
+                self.reference_brakes = _build_brake_points(self.reference_lap)
 
         # --- Demo recording ---
         if self.recording_demo and self.track:
@@ -592,6 +637,7 @@ class DrivingCoach:
             if self.reference_lap:
                 self.sectors.build_from_reference(self.reference_lap)
                 self.reference_shifts = _build_shift_points(self.reference_lap)
+                self.reference_brakes = _build_brake_points(self.reference_lap)
 
     def _find_closest_ref(self, x, z):
         """Find the closest reference sample to (x, z), searching forward."""
@@ -695,6 +741,12 @@ class DrivingCoach:
         coaching['shift_tip'] = shift_tip
         coaching['shift_type'] = shift_type
 
+        # --- Brake lookahead ---
+        brake_info = None
+        if ref_idx >= 0 and self.reference_brakes:
+            brake_info = self._find_upcoming_brake(ref_idx, x, z)
+        coaching['brake_ahead'] = brake_info
+
         # --- General driving tips ---
         cur_brake = data.get('brake', 0)
         cur_throttle = data.get('throttle', 0)
@@ -796,10 +848,27 @@ class DrivingCoach:
                     if d < 30:
                         return {'tip': 'ВИЩЕ \u2191 ' + gear_str, 'type': 'up_now'}
                     else:
-                        return {'tip': '\u2191 ' + gear_str + ' in ' + str(int(d)) + 'm', 'type': 'up'}
+                        return {'tip': '\u2191 ' + gear_str + ' через ' + str(int(d)) + 'м', 'type': 'up'}
                 else:
                     if d < 30:
                         return {'tip': 'НИЖЧЕ \u2193 ' + gear_str, 'type': 'down_now'}
                     else:
-                        return {'tip': '\u2193 ' + gear_str + ' in ' + str(int(d)) + 'm', 'type': 'down'}
+                        return {'tip': '\u2193 ' + gear_str + ' через ' + str(int(d)) + 'м', 'type': 'down'}
+        return None
+
+    def _find_upcoming_brake(self, ref_idx, cur_x, cur_z):
+        """Look ahead for upcoming brake zone. Returns dict or None."""
+        for bp in self.reference_brakes:
+            if bp['idx'] <= ref_idx:
+                continue
+            if bp['idx'] > ref_idx + BRAKE_LOOKAHEAD:
+                break
+
+            d = _dist((cur_x, cur_z), (bp['x'], bp['z']))
+            if d < BRAKE_ANNOUNCE_DIST:
+                return {
+                    'dist': int(d),
+                    'target_speed': int(bp['min_speed']),
+                    'brake_speed': int(bp['brake_speed']),
+                }
         return None

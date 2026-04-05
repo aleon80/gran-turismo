@@ -604,6 +604,56 @@ body {
 
 .fuel-laps.critical { color: #ff4444; font-weight: 700; }
 
+/* Reference speed (center column) */
+.ref-speed {
+    font-size: 16px;
+    font-weight: 600;
+    color: #555;
+    margin-top: 2px;
+    min-height: 20px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.ref-speed .ref-spd-val {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.ref-speed .ref-spd-val.faster { color: #00ff88; }
+.ref-speed .ref-spd-val.slower { color: #ff5555; }
+.ref-speed .ref-spd-val.match { color: #888; }
+
+.ref-speed .ref-spd-label {
+    font-size: 10px;
+    color: #555;
+    margin-left: 4px;
+}
+
+/* Brake ahead indicator */
+.brake-ahead {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ff4444;
+    text-align: center;
+    min-height: 20px;
+    letter-spacing: 0.5px;
+}
+
+.brake-ahead .brake-dist {
+    color: #ffaa00;
+    font-size: 13px;
+}
+
+.brake-ahead .brake-target {
+    color: #ff4444;
+    font-size: 18px;
+}
+
+.brake-ahead.imminent {
+    animation: flash 0.3s infinite alternate;
+}
+
 /* Pit info (center column, below gear limits) */
 .pit-info {
     font-size: 13px;
