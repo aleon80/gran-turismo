@@ -125,6 +125,46 @@ body {
     padding: 8px 12px;
 }
 
+/* Track bar */
+.track-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 24px;
+    flex-shrink: 0;
+    padding: 0 4px;
+}
+
+.track-name {
+    font-size: 12px;
+    color: #666;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.track-name.detected {
+    color: #aa88ff;
+}
+
+.demo-btn {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    border: 1px solid #aa3333;
+    background: #2a1a1a;
+    color: #ff6666;
+    cursor: pointer;
+}
+
+.demo-btn.recording {
+    background: #aa3333;
+    color: #fff;
+    border-color: #ff4444;
+    animation: pulse 1s ease-in-out infinite;
+}
+
 /* RPM Section */
 .rpm-section {
     display: flex;

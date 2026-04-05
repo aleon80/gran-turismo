@@ -2,6 +2,7 @@
 
 import math
 from analyzer import analyze_lap, summarize_lap
+from tracks import identify_track, register_track, save_reference_lap, load_reference_lap
 
 # Minimum distance (meters) between recorded samples along the track
 SAMPLE_INTERVAL = 5.0
@@ -430,6 +431,11 @@ class DrivingCoach:
         self.pit_strategy = PitStrategy()
         self.lap_reports = []  # [{lap, time_ms, summary, zones}]
 
+        # Track identification
+        self.track = None           # {id, name, length, ...} or None
+        self.track_detected = False
+        self.recording_demo = False  # true = saving next lap as demo reference
+
         # Tip cooldown tracking
         self._last_tip = ''
         self._last_tip_pos = None
@@ -483,6 +489,8 @@ class DrivingCoach:
             'gear_limits': self.gear_limits.get_limits_display(),
             'lap_reports': self.lap_reports,
             'pit': pit,
+            'track': self.track,
+            'recording_demo': self.recording_demo,
         }
 
         if self.reference_lap:
@@ -492,6 +500,14 @@ class DrivingCoach:
             self._gear_limit_shift(data, coaching)
 
         return coaching
+
+    def start_demo_recording(self):
+        """Start recording next lap as demo reference."""
+        self.recording_demo = True
+
+    def stop_demo_recording(self):
+        """Stop demo recording mode."""
+        self.recording_demo = False
 
     def _finish_lap(self, data):
         """Called when a new lap starts — process the just-completed lap."""
@@ -514,6 +530,31 @@ class DrivingCoach:
         # Record pit strategy data for the completed lap
         self.pit_strategy.on_lap_finish(
             self.current_lap, data.get('fuel_level', 0))
+
+        # --- Track identification ---
+        if not self.track_detected and len(completed_samples) > 20:
+            track = identify_track(completed_samples)
+            if not track:
+                track = register_track(completed_samples)
+            self.track = track
+            self.track_detected = True
+
+            # Try to load saved reference lap for this track
+            if track and not self.reference_lap:
+                ref = load_reference_lap(track['id'])
+                if ref:
+                    self.reference_lap = ref['samples']
+                    self.reference_time = ref['time_ms']
+                    self.sectors.build_from_reference(self.reference_lap)
+                    self.reference_shifts = _build_shift_points(self.reference_lap)
+
+        # --- Demo recording ---
+        if self.recording_demo and self.track:
+            save_reference_lap(self.track['id'], completed_samples,
+                               last_lap_ms, source='demo')
+            self.reference_lap = completed_samples
+            self.reference_time = last_lap_ms
+            self.recording_demo = False
 
         self.completed_laps[self.current_lap] = {
             'samples': completed_samples,
@@ -540,6 +581,11 @@ class DrivingCoach:
             self.reference_time = last_lap_ms
             self.reference_lap = completed_samples
             is_new_best = True
+
+            # Save personal best for this track
+            if self.track:
+                save_reference_lap(self.track['id'], completed_samples,
+                                   last_lap_ms, source='personal')
 
         # Build sectors and shift map from reference
         if is_new_best or not self.sectors.ready:

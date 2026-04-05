@@ -17,6 +17,7 @@ from aiohttp import web
 
 from gt7_packet import decrypt_packet, parse_packet
 from coach import DrivingCoach
+from tracks import rename_track
 
 logger = logging.getLogger('gt7dash')
 
@@ -185,10 +186,36 @@ async def index_handler(request):
     return web.FileResponse(STATIC_DIR / 'index.html')
 
 
+async def demo_record_handler(request):
+    """Start recording next lap as demo reference."""
+    coach.start_demo_recording()
+    return web.json_response({'ok': True, 'status': 'recording'})
+
+
+async def demo_stop_handler(request):
+    """Stop demo recording."""
+    coach.stop_demo_recording()
+    return web.json_response({'ok': True, 'status': 'stopped'})
+
+
+async def track_rename_handler(request):
+    """Rename current track."""
+    data = await request.json()
+    name = data.get('name', '').strip()
+    if not name or not coach.track:
+        return web.json_response({'ok': False}, status=400)
+    rename_track(coach.track['id'], name)
+    coach.track['name'] = name
+    return web.json_response({'ok': True, 'name': name})
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get('/', index_handler)
     app.router.add_get('/ws', ws_handler)
+    app.router.add_post('/api/demo/start', demo_record_handler)
+    app.router.add_post('/api/demo/stop', demo_stop_handler)
+    app.router.add_post('/api/track/rename', track_rename_handler)
     app.router.add_static('/static', STATIC_DIR)
     return app
 

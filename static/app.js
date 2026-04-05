@@ -6,6 +6,25 @@
     var alertShift = document.getElementById('alert-shift');
     var alertBrake = document.getElementById('alert-brake');
 
+    // Track info
+    var trackNameEl = document.getElementById('track-name');
+    var demoBtn = document.getElementById('demo-btn');
+    var demoRecording = false;
+
+    demoBtn.addEventListener('click', function () {
+        if (demoRecording) {
+            fetch('/api/demo/stop', { method: 'POST' });
+            demoBtn.textContent = 'REC DEMO';
+            demoBtn.classList.remove('recording');
+            demoRecording = false;
+        } else {
+            fetch('/api/demo/start', { method: 'POST' });
+            demoBtn.textContent = '\u25CF REC...';
+            demoBtn.classList.add('recording');
+            demoRecording = true;
+        }
+    });
+
     // Elements
     var rpmBar = document.getElementById('rpm-bar');
     var rpmVal = document.getElementById('rpm-val');
@@ -619,6 +638,24 @@
             } else {
                 deltaSpeed.textContent = '-';
                 deltaSpeed.className = 'delta-value';
+            }
+
+            // Track detection
+            if (c.track && c.track.name) {
+                trackNameEl.textContent = c.track.name;
+                trackNameEl.className = 'track-name detected';
+                demoBtn.classList.remove('hidden');
+            }
+
+            // Demo recording state from server
+            if (c.recording_demo && !demoRecording) {
+                demoBtn.textContent = '\u25CF REC...';
+                demoBtn.classList.add('recording');
+                demoRecording = true;
+            } else if (!c.recording_demo && demoRecording) {
+                demoBtn.textContent = 'REC DEMO';
+                demoBtn.classList.remove('recording');
+                demoRecording = false;
             }
 
             // Status
