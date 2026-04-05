@@ -45,11 +45,18 @@ class LapRecorder:
     def __init__(self):
         self.samples = []
         self.last_pos = None
+        self.total_frames = 0
+        self.full_throttle_frames = 0
 
     def add(self, data: dict):
         x, z = data.get('pos_x', 0), data.get('pos_z', 0)
         if abs(x) < 0.1 and abs(z) < 0.1:
             return
+
+        # Count all frames for throttle %
+        self.total_frames += 1
+        if data.get('throttle', 0) > 0.95:
+            self.full_throttle_frames += 1
 
         if self.last_pos and _dist((x, z), self.last_pos) < SAMPLE_INTERVAL:
             return
@@ -65,6 +72,12 @@ class LapRecorder:
             'gear': data.get('gear', 0),
             'time': data.get('track_time', 0),
         })
+
+    @property
+    def throttle_pct(self):
+        if self.total_frames == 0:
+            return 0
+        return round(self.full_throttle_frames / self.total_frames * 100, 1)
 
 
 class SectorTracker:
@@ -465,6 +478,11 @@ class DrivingCoach:
         self.reference_time = None
         self.reference_shifts = []
         self.reference_brakes = []
+        self.ref_throttle_pct = 0
+        self.ref_speed_profile = []  # [[dist, speed], ...] downsampled
+        self.ref_line = []            # [[x, z], ...] downsampled
+        self._brake_history = []      # last N brake values for trail braking
+        self._last_trail_brake_pos = None
         self.current_recorder = LapRecorder()
         self.completed_laps = {}
         self.current_lap = -1
@@ -502,8 +520,15 @@ class DrivingCoach:
             self.pit_strategy.on_lap_start(
                 data.get('fuel_level', 0), data.get('total_laps', 0))
 
+            self._brake_history = []
+
         # Record current lap
         self.current_recorder.add(data)
+
+        # Brake history for trail braking detection
+        self._brake_history.append(data.get('brake', 0))
+        if len(self._brake_history) > 20:
+            self._brake_history = self._brake_history[-20:]
 
         # Learn gear speed limits
         self.gear_limits.on_telemetry(data)
@@ -535,6 +560,11 @@ class DrivingCoach:
             'pit': pit,
             'track': self.track,
             'recording_demo': self.recording_demo,
+            'cur_throttle_pct': self.current_recorder.throttle_pct,
+            'ref_throttle_pct': self.ref_throttle_pct,
+            'ref_speed_profile': self.ref_speed_profile,
+            'ref_line': self.ref_line,
+            'trail_brake_tip': '',
         }
 
         if self.reference_lap:
@@ -639,9 +669,29 @@ class DrivingCoach:
         """Rebuild all derived data from current reference lap."""
         if not self.reference_lap:
             return
-        self.sectors.build_from_reference(self.reference_lap)
-        self.reference_shifts = _build_shift_points(self.reference_lap)
-        self.reference_brakes = _build_brake_points(self.reference_lap)
+        ref = self.reference_lap
+        self.sectors.build_from_reference(ref)
+        self.reference_shifts = _build_shift_points(ref)
+        self.reference_brakes = _build_brake_points(ref)
+
+        # Throttle %
+        full = sum(1 for s in ref if s['throttle'] > 0.95)
+        self.ref_throttle_pct = round(full / max(1, len(ref)) * 100, 1)
+
+        # Speed profile (downsampled ~100 points)
+        dists = _cumulative_distances(ref)
+        total_dist = dists[-1] if dists else 0
+        step = max(1, len(ref) // 100)
+        self.ref_speed_profile = []
+        for i in range(0, len(ref), step):
+            self.ref_speed_profile.append([
+                round(dists[i], 1), round(ref[i]['speed'], 1)])
+
+        # Reference line (downsampled ~150 points)
+        step_line = max(1, len(ref) // 150)
+        self.ref_line = []
+        for i in range(0, len(ref), step_line):
+            self.ref_line.append([round(ref[i]['x'], 1), round(ref[i]['z'], 1)])
 
     def _find_closest_ref(self, x, z):
         """Find the closest reference sample to (x, z), searching forward."""
@@ -751,6 +801,11 @@ class DrivingCoach:
             brake_info = self._find_upcoming_brake(ref_idx, x, z)
         coaching['brake_ahead'] = brake_info
 
+        # --- Trail braking detection ---
+        trail_tip = self._detect_trail_braking(x, z)
+        if trail_tip:
+            coaching['trail_brake_tip'] = trail_tip
+
         # --- General driving tips ---
         cur_brake = data.get('brake', 0)
         cur_throttle = data.get('throttle', 0)
@@ -859,6 +914,42 @@ class DrivingCoach:
                     else:
                         return {'tip': '\u2193 ' + gear_str + ' через ' + str(int(d)) + 'м', 'type': 'down'}
         return None
+
+    def _detect_trail_braking(self, x, z):
+        """Detect brake release pattern. Returns tip string or ''."""
+        h = self._brake_history
+        if len(h) < 8:
+            return ''
+
+        # Check if brake was just released (was braking, now not)
+        if h[-1] > 0.05 or h[-4] < 0.2:
+            return ''
+
+        # Find peak brake in recent history
+        peak = max(h[-15:]) if len(h) >= 15 else max(h)
+        if peak < 0.3:
+            return ''
+
+        # Count how many frames brake was decreasing before release
+        gradual_frames = 0
+        for i in range(len(h) - 2, max(0, len(h) - 15), -1):
+            if h[i] > h[i + 1] + 0.01:
+                gradual_frames += 1
+            elif h[i] < 0.05:
+                break
+            else:
+                break
+
+        # Cooldown
+        if self._last_trail_brake_pos:
+            if _dist((x, z), self._last_trail_brake_pos) < TIP_COOLDOWN_DIST * 2:
+                return ''
+        self._last_trail_brake_pos = (x, z)
+
+        if gradual_frames >= 4:
+            return 'ДОБРЕ ТРЕЙЛ!'
+        else:
+            return 'ТРЕЙЛ БРЕЙК!'
 
     def _find_upcoming_brake(self, ref_idx, cur_x, cur_z):
         """Look ahead for upcoming brake zone. Returns dict or None."""

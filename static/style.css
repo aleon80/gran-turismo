@@ -409,6 +409,14 @@ body {
     border: 1px solid #2a2a4a;
 }
 
+#speed-graph {
+    background: #111122;
+    border-radius: 6px;
+    border: 1px solid #2a2a4a;
+    width: 100%;
+    max-width: 300px;
+}
+
 .info-block {
     display: flex;
     flex-direction: column;
@@ -480,6 +488,8 @@ body {
 .coach-tip.throttle { color: #ffcc00; }
 .coach-tip.speed { color: #ff8844; }
 .coach-tip.good { color: #00ff88; }
+.coach-tip.trail_good { color: #66ccff; }
+.coach-tip.trail_bad { color: #ffaa00; }
 
 @keyframes flash {
     from { opacity: 1; }

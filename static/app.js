@@ -69,6 +69,15 @@
     var mapCtx = mapCanvas.getContext('2d');
     var trail = [];         // stored trail from server
     var curPos = null;      // current car position [x, z]
+    var refLine = [];       // reference racing line [[x, z], ...]
+
+    // Speed graph
+    var sgCanvas = document.getElementById('speed-graph');
+    var sgCtx = sgCanvas.getContext('2d');
+    var refSpeedProfile = []; // [[dist, speed], ...]
+
+    // Throttle %
+    var throttlePctEl = document.getElementById('throttle-pct');
 
     // Coach elements
     var coachTip = document.getElementById('coach-tip');
@@ -378,6 +387,18 @@
         }
     }
 
+    // Delta speed to color (red = slower, green = faster)
+    function deltaColor(delta) {
+        var clamped = Math.max(-20, Math.min(20, delta));
+        if (clamped >= 0) {
+            var t = clamped / 20;
+            return 'rgb(' + Math.round(100 * (1 - t)) + ',' + Math.round(150 + 105 * t) + ',' + Math.round(100 * (1 - t)) + ')';
+        } else {
+            var t2 = -clamped / 20;
+            return 'rgb(' + Math.round(150 + 105 * t2) + ',' + Math.round(100 * (1 - t2)) + ',' + Math.round(80 * (1 - t2)) + ')';
+        }
+    }
+
     // --- Track map drawing ---
     function drawTrackMap() {
         var w = mapCanvas.width;
@@ -386,10 +407,14 @@
 
         if (trail.length < 2) return;
 
-        // Find bounds
+        // Find bounds (include refLine for alignment)
         var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-        for (var i = 0; i < trail.length; i++) {
-            var p = trail[i];
+        var allPts = trail;
+        if (refLine.length > 0) {
+            allPts = trail.concat(refLine.map(function(p) { return p; }));
+        }
+        for (var i = 0; i < allPts.length; i++) {
+            var p = allPts[i];
             if (p[0] < minX) minX = p[0];
             if (p[0] > maxX) maxX = p[0];
             if (p[1] < minZ) minZ = p[1];
@@ -416,7 +441,22 @@
             if (trail[si][2] && trail[si][2] > maxSpd) maxSpd = trail[si][2];
         }
 
-        // Draw speed-colored trail
+        // Draw reference racing line (thin, dashed)
+        if (refLine.length > 1) {
+            mapCtx.beginPath();
+            mapCtx.moveTo(tx(refLine[0][0]), tz(refLine[0][1]));
+            for (var ri = 1; ri < refLine.length; ri++) {
+                mapCtx.lineTo(tx(refLine[ri][0]), tz(refLine[ri][1]));
+            }
+            mapCtx.strokeStyle = 'rgba(100, 180, 255, 0.3)';
+            mapCtx.lineWidth = 1.5;
+            mapCtx.setLineDash([4, 4]);
+            mapCtx.stroke();
+            mapCtx.setLineDash([]);
+        }
+
+        // Draw trail colored by delta speed (if available) or absolute speed
+        var hasDelta = trail.length > 0 && trail[0].length > 3;
         mapCtx.lineWidth = 3;
         mapCtx.lineJoin = 'round';
         mapCtx.lineCap = 'round';
@@ -424,8 +464,12 @@
             mapCtx.beginPath();
             mapCtx.moveTo(tx(trail[j-1][0]), tz(trail[j-1][1]));
             mapCtx.lineTo(tx(trail[j][0]), tz(trail[j][1]));
-            var spd = trail[j][2] || 0;
-            mapCtx.strokeStyle = spd > 0 ? speedColor(spd, maxSpd) : '#334466';
+            if (hasDelta && trail[j][3] !== 0) {
+                mapCtx.strokeStyle = deltaColor(trail[j][3]);
+            } else {
+                var spd = trail[j][2] || 0;
+                mapCtx.strokeStyle = spd > 0 ? speedColor(spd, maxSpd) : '#334466';
+            }
             mapCtx.stroke();
         }
 
@@ -444,6 +488,104 @@
             mapCtx.lineWidth = 2;
             mapCtx.stroke();
         }
+    }
+
+    // --- Speed graph ---
+    function drawSpeedGraph() {
+        var w = sgCanvas.width;
+        var h = sgCanvas.height;
+        sgCtx.clearRect(0, 0, w, h);
+
+        if (refSpeedProfile.length < 2 && trail.length < 2) return;
+
+        // Find max distance and max speed
+        var maxDist = 0;
+        var maxSpd = 100;
+        for (var i = 0; i < refSpeedProfile.length; i++) {
+            if (refSpeedProfile[i][0] > maxDist) maxDist = refSpeedProfile[i][0];
+            if (refSpeedProfile[i][1] > maxSpd) maxSpd = refSpeedProfile[i][1];
+        }
+
+        // Build current lap speed profile from trail
+        var curProfile = [];
+        if (trail.length > 1) {
+            var cumDist = 0;
+            curProfile.push([0, trail[0][2] || 0]);
+            for (var ti = 1; ti < trail.length; ti++) {
+                var dx = trail[ti][0] - trail[ti-1][0];
+                var dz = trail[ti][1] - trail[ti-1][1];
+                cumDist += Math.sqrt(dx * dx + dz * dz);
+                var s = trail[ti][2] || 0;
+                curProfile.push([cumDist, s]);
+                if (s > maxSpd) maxSpd = s;
+                if (cumDist > maxDist) maxDist = cumDist;
+            }
+        }
+
+        if (maxDist < 100) return;
+        maxSpd = maxSpd * 1.1;
+
+        var pad = 2;
+        var drawW = w - pad * 2;
+        var drawH = h - pad * 2;
+
+        function px(dist) { return pad + (dist / maxDist) * drawW; }
+        function py(spd) { return pad + drawH - (spd / maxSpd) * drawH; }
+
+        // Grid lines
+        sgCtx.strokeStyle = '#1a1a2e';
+        sgCtx.lineWidth = 0.5;
+        for (var g = 50; g < maxSpd; g += 50) {
+            var gy = py(g);
+            sgCtx.beginPath();
+            sgCtx.moveTo(pad, gy);
+            sgCtx.lineTo(w - pad, gy);
+            sgCtx.stroke();
+        }
+
+        // Draw reference (gray)
+        if (refSpeedProfile.length > 1) {
+            sgCtx.beginPath();
+            sgCtx.moveTo(px(refSpeedProfile[0][0]), py(refSpeedProfile[0][1]));
+            for (var ri = 1; ri < refSpeedProfile.length; ri++) {
+                sgCtx.lineTo(px(refSpeedProfile[ri][0]), py(refSpeedProfile[ri][1]));
+            }
+            sgCtx.strokeStyle = 'rgba(100, 180, 255, 0.5)';
+            sgCtx.lineWidth = 1;
+            sgCtx.stroke();
+        }
+
+        // Draw current (colored by delta)
+        if (curProfile.length > 1) {
+            sgCtx.lineWidth = 1.5;
+            sgCtx.lineJoin = 'round';
+            for (var ci = 1; ci < curProfile.length; ci++) {
+                sgCtx.beginPath();
+                sgCtx.moveTo(px(curProfile[ci-1][0]), py(curProfile[ci-1][1]));
+                sgCtx.lineTo(px(curProfile[ci][0]), py(curProfile[ci][1]));
+                // Find closest ref speed for coloring
+                var refSpd = 0;
+                for (var rs = 0; rs < refSpeedProfile.length - 1; rs++) {
+                    if (refSpeedProfile[rs][0] <= curProfile[ci][0] && refSpeedProfile[rs+1][0] > curProfile[ci][0]) {
+                        refSpd = refSpeedProfile[rs][1];
+                        break;
+                    }
+                }
+                if (refSpd > 0) {
+                    sgCtx.strokeStyle = deltaColor(curProfile[ci][1] - refSpd);
+                } else {
+                    sgCtx.strokeStyle = '#00ff88';
+                }
+                sgCtx.stroke();
+            }
+        }
+
+        // Labels
+        sgCtx.fillStyle = '#555';
+        sgCtx.font = '8px sans-serif';
+        sgCtx.textAlign = 'left';
+        sgCtx.fillText(Math.round(maxSpd * 0.9) + '', pad + 1, pad + 10);
+        sgCtx.fillText('0', pad + 1, h - pad - 2);
     }
 
     function update(d) {
@@ -695,6 +837,35 @@
                 coachStatus.textContent = 'Порівняння з найкращим колом';
             }
 
+            // Cache reference data when received
+            if (c.ref_line) refLine = c.ref_line;
+            if (c.ref_speed_profile) refSpeedProfile = c.ref_speed_profile;
+
+            // Throttle %
+            if (c.cur_throttle_pct > 0) {
+                var curPct = c.cur_throttle_pct;
+                var refPct = c.ref_throttle_pct;
+                if (refPct > 0) {
+                    var tCls = curPct >= refPct ? 'ahead' : 'behind';
+                    throttlePctEl.textContent = curPct.toFixed(0) + '% / ' + refPct.toFixed(0) + '%';
+                    throttlePctEl.className = 'delta-value ' + tCls;
+                } else {
+                    throttlePctEl.textContent = curPct.toFixed(0) + '%';
+                    throttlePctEl.className = 'delta-value';
+                }
+            }
+
+            // Trail braking tip
+            if (c.trail_brake_tip) {
+                var tbType = c.trail_brake_tip.indexOf('ДОБРЕ') >= 0 ? 'trail_good' : 'trail_bad';
+                coachTip.textContent = c.trail_brake_tip;
+                coachTip.className = 'coach-tip ' + tbType;
+                if (tipFadeTimeout) clearTimeout(tipFadeTimeout);
+                tipFadeTimeout = setTimeout(function () {
+                    coachTip.textContent = '';
+                }, 2500);
+            }
+
             // Cache all_laps when present
             if (c.all_laps) cachedAllLaps = c.all_laps;
 
@@ -758,6 +929,7 @@
         }
         curPos = [d.pos_x, d.pos_z];
         drawTrackMap();
+        drawSpeedGraph();
     }
 
     // Check for stale data

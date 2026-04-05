@@ -117,7 +117,8 @@ class GT7Protocol(asyncio.DatagramProtocol):
                     abs(pz - track_points[-1][1]) > 2
                 ):
                     if len(track_points) < MAX_TRACK_POINTS:
-                        track_points.append([px, pz, spd])
+                        delta_spd = coach_data.get('delta_speed', 0)
+                        track_points.append([px, pz, spd, delta_spd])
 
 
 async def heartbeat_loop(protocol: GT7Protocol):
@@ -149,6 +150,10 @@ async def broadcast_loop():
                 coach_data.pop('all_laps', None)
             if last_packet_id % 60 != 0:
                 coach_data.pop('lap_reports', None)
+            # Heavy reference data: only every ~5 seconds
+            if last_packet_id % 150 != 0:
+                coach_data.pop('ref_speed_profile', None)
+                coach_data.pop('ref_line', None)
             payload['coach'] = coach_data
 
         # Send track trail every ~2 seconds
