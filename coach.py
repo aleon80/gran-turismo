@@ -589,9 +589,7 @@ class DrivingCoach:
                 if ref:
                     self.reference_lap = ref['samples']
                     self.reference_time = ref['time_ms']
-                    self.sectors.build_from_reference(self.reference_lap)
-                    self.reference_shifts = _build_shift_points(self.reference_lap)
-                self.reference_brakes = _build_brake_points(self.reference_lap)
+                    self._rebuild_reference()
 
         # --- Demo recording ---
         if self.recording_demo and self.track:
@@ -599,6 +597,7 @@ class DrivingCoach:
                                last_lap_ms, source='demo')
             self.reference_lap = completed_samples
             self.reference_time = last_lap_ms
+            self._rebuild_reference()
             self.recording_demo = False
 
         self.completed_laps[self.current_lap] = {
@@ -632,12 +631,17 @@ class DrivingCoach:
                 save_reference_lap(self.track['id'], completed_samples,
                                    last_lap_ms, source='personal')
 
-        # Build sectors and shift map from reference
+        # Build sectors, shift and brake maps from reference
         if is_new_best or not self.sectors.ready:
-            if self.reference_lap:
-                self.sectors.build_from_reference(self.reference_lap)
-                self.reference_shifts = _build_shift_points(self.reference_lap)
-                self.reference_brakes = _build_brake_points(self.reference_lap)
+            self._rebuild_reference()
+
+    def _rebuild_reference(self):
+        """Rebuild all derived data from current reference lap."""
+        if not self.reference_lap:
+            return
+        self.sectors.build_from_reference(self.reference_lap)
+        self.reference_shifts = _build_shift_points(self.reference_lap)
+        self.reference_brakes = _build_brake_points(self.reference_lap)
 
     def _find_closest_ref(self, x, z):
         """Find the closest reference sample to (x, z), searching forward."""
