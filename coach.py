@@ -661,10 +661,10 @@ class DrivingCoach:
         # 2) Direct comparison: wrong gear right now
         if not shift_tip and cur_gear > 0 and ref_gear > 0:
             if cur_gear < ref_gear:
-                shift_tip = 'SHIFT UP \u2191 ' + str(ref_gear)
+                shift_tip = 'ВИЩЕ \u2191 ' + str(ref_gear)
                 shift_type = 'up_now'
             elif cur_gear > ref_gear:
-                shift_tip = 'SHIFT DOWN \u2193 ' + str(ref_gear)
+                shift_tip = 'НИЖЧЕ \u2193 ' + str(ref_gear)
                 shift_type = 'down_now'
 
         # 3) Gear speed limit: hitting the ceiling for this gear
@@ -672,15 +672,15 @@ class DrivingCoach:
             gl_advice, gl_target = self.gear_limits.get_shift_advice(cur_gear, cur_speed)
             if gl_advice == 'up':
                 g_max = self.gear_limits.gears.get(cur_gear, {}).get('max_speed', 0)
-                shift_tip = 'LIMIT \u2191 ' + str(gl_target) + ' (max ' + str(int(g_max)) + ')'
+                shift_tip = '\u041B\u0406\u041C\u0406\u0422 \u2191 ' + str(gl_target) + ' (max ' + str(int(g_max)) + ')'
                 shift_type = 'up_now'
             elif gl_advice == 'down':
-                shift_tip = 'TOO SLOW \u2193 ' + str(gl_target)
+                shift_tip = 'ПОВІЛЬНО \u2193 ' + str(gl_target)
                 shift_type = 'down_now'
 
         # 4) RPM-based upshift fallback
         if not shift_tip and cur_rpm > rpm_max * RPM_UPSHIFT_FRACTION and cur_gear > 0:
-            shift_tip = 'SHIFT UP \u2191'
+            shift_tip = 'ВИЩЕ \u2191'
             shift_type = 'up_now'
 
         # Apply shift tip cooldown
@@ -706,26 +706,26 @@ class DrivingCoach:
         tip_type = ''
 
         if cur_brake > 0.3 and ref_brake < 0.1 and ref_idx >= 0:
-            tip = 'BRAKE LATER'
+            tip = 'ГАЛЬМУЙ ПІЗНІШЕ'
             tip_type = 'brake'
         elif cur_brake < 0.1 and ref_brake > 0.3:
             if cur_speed > ref_speed + 5:
-                tip = 'BRAKE NOW!'
+                tip = 'ГАЛЬМУЙ ЗАРАЗ!'
                 tip_type = 'brake_urgent'
             else:
-                tip = 'GOOD SPEED'
+                tip = 'ДОБРА ШВИДКІСТЬ'
                 tip_type = 'good'
         elif speed_diff < -SPEED_SLOW_THRESHOLD and cur_throttle < 0.5:
-            tip = 'MORE THROTTLE'
+            tip = 'БІЛЬШЕ ГАЗУ'
             tip_type = 'throttle'
         elif speed_diff < -SPEED_SLOW_THRESHOLD:
-            tip = 'CARRY MORE SPEED'
+            tip = 'ТРИМАЙ ШВИДКІСТЬ'
             tip_type = 'speed'
         elif speed_diff > SPEED_FAST_THRESHOLD and cur_brake < 0.1:
-            tip = 'GOOD SPEED!'
+            tip = 'ДОБРА ШВИДКІСТЬ!'
             tip_type = 'good'
         elif cur_throttle < ref_throttle - THROTTLE_DIFF and ref_throttle > 0.5:
-            tip = 'MORE GAS'
+            tip = 'ДОДАЙ ГАЗУ'
             tip_type = 'throttle'
 
         # Apply cooldown
@@ -758,15 +758,15 @@ class DrivingCoach:
         gl_advice, gl_target = self.gear_limits.get_shift_advice(cur_gear, cur_speed)
         if gl_advice == 'up':
             g_max = self.gear_limits.gears.get(cur_gear, {}).get('max_speed', 0)
-            shift_tip = 'LIMIT \u2191 ' + str(gl_target) + ' (max ' + str(int(g_max)) + ')'
+            shift_tip = '\u041B\u0406\u041C\u0406\u0422 \u2191 ' + str(gl_target) + ' (max ' + str(int(g_max)) + ')'
             shift_type = 'up_now'
         elif gl_advice == 'down':
-            shift_tip = 'TOO SLOW \u2193 ' + str(gl_target)
+            shift_tip = 'ПОВІЛЬНО \u2193 ' + str(gl_target)
             shift_type = 'down_now'
 
         # RPM fallback
         if not shift_tip and cur_rpm > rpm_max * RPM_UPSHIFT_FRACTION and cur_gear > 0:
-            shift_tip = 'SHIFT UP \u2191'
+            shift_tip = 'ВИЩЕ \u2191'
             shift_type = 'up_now'
 
         # Cooldown
@@ -794,12 +794,12 @@ class DrivingCoach:
                 gear_str = str(sp['to_gear'])
                 if sp['type'] == 'up':
                     if d < 30:
-                        return {'tip': 'SHIFT UP \u2191 ' + gear_str, 'type': 'up_now'}
+                        return {'tip': 'ВИЩЕ \u2191 ' + gear_str, 'type': 'up_now'}
                     else:
                         return {'tip': '\u2191 ' + gear_str + ' in ' + str(int(d)) + 'm', 'type': 'up'}
                 else:
                     if d < 30:
-                        return {'tip': 'SHIFT DOWN \u2193 ' + gear_str, 'type': 'down_now'}
+                        return {'tip': 'НИЖЧЕ \u2193 ' + gear_str, 'type': 'down_now'}
                     else:
                         return {'tip': '\u2193 ' + gear_str + ' in ' + str(int(d)) + 'm', 'type': 'down'}
         return None

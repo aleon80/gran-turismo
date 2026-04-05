@@ -14,12 +14,12 @@
     demoBtn.addEventListener('click', function () {
         if (demoRecording) {
             fetch('/api/demo/stop', { method: 'POST' });
-            demoBtn.textContent = 'REC DEMO';
+            demoBtn.textContent = 'ЗАП ДЕМО';
             demoBtn.classList.remove('recording');
             demoRecording = false;
         } else {
             fetch('/api/demo/start', { method: 'POST' });
-            demoBtn.textContent = '\u25CF REC...';
+            demoBtn.textContent = '\u25CF ЗАПИС...';
             demoBtn.classList.add('recording');
             demoRecording = true;
         }
@@ -104,13 +104,13 @@
             var s = rpt.summary;
             html += '<div class="lr-lap">';
             html += '<div class="lr-lap-header">';
-            html += '<span class="lr-lap-num">Lap ' + rpt.lap + '</span>';
+            html += '<span class="lr-lap-num">Коло ' + rpt.lap + '</span>';
             html += '<span class="lr-lap-time">' + formatTime(rpt.time_ms) + '</span>';
             html += '</div>';
 
             html += '<div class="lr-totals">';
-            if (s.total_loss > 0) html += '<span class="lr-loss">-' + s.total_loss.toFixed(2) + 's lost</span>';
-            if (s.total_gain > 0) html += '<span class="lr-gain">+' + s.total_gain.toFixed(2) + 's gained</span>';
+            if (s.total_loss > 0) html += '<span class="lr-loss">-' + s.total_loss.toFixed(2) + 'с втрач.</span>';
+            if (s.total_gain > 0) html += '<span class="lr-gain">+' + s.total_gain.toFixed(2) + 'с виграно</span>';
             html += '</div>';
 
             // Top errors
@@ -120,7 +120,13 @@
                     html += '<div class="lr-error">';
                     html += '<span class="lr-zone">' + err.zone + '</span>';
                     html += '<span class="lr-delta loss">+' + err.loss.toFixed(2) + 's</span>';
-                    html += '<span class="lr-type ' + err.type + '">' + err.type.replace(/_/g, ' ') + '</span>';
+                    var typeLabels = {
+                        brake_early: 'рано гальмував', brake_late: 'пізно гальмував',
+                        slow_corner: 'повільний поворот', slow_exit: 'повільний вихід',
+                        wrong_gear: 'неправильна передача', unnecessary_brake: 'зайве гальмування',
+                        fast_corner: 'швидкий поворот'
+                    };
+                    html += '<span class="lr-type ' + err.type + '">' + (typeLabels[err.type] || err.type) + '</span>';
                     html += '<span class="lr-detail">' + err.detail + '</span>';
                     html += '</div>';
                 }
@@ -235,7 +241,7 @@
             }
         }
 
-        var html = '<table><tr><th>LAP</th><th>S1</th><th>S2</th><th>S3</th><th>TOTAL</th></tr>';
+        var html = '<table><tr><th>КОЛО</th><th>С1</th><th>С2</th><th>С3</th><th>РАЗОМ</th></tr>';
 
         for (var j = 0; j < allLaps.length; j++) {
             var l = allLaps[j];
@@ -270,7 +276,7 @@
 
         // Current lap in-progress sectors
         if (curSectors && curSectors.length > 0) {
-            html += '<tr><td style="color:#66ccff">now</td>';
+            html += '<tr><td style="color:#66ccff">зараз</td>';
             for (var m = 0; m < 3; m++) {
                 if (m < curSectors.length) {
                     var cv = curSectors[m];
@@ -293,14 +299,10 @@
     function posLabel(pos, total) {
         if (pos <= 0) return '-';
         var s = String(pos);
-        var suffix = 'th';
-        if (pos === 1) suffix = 'st';
-        else if (pos === 2) suffix = 'nd';
-        else if (pos === 3) suffix = 'rd';
         if (total > 0) {
-            return s + suffix + '/' + total;
+            return s + '/' + total;
         }
-        return s + suffix;
+        return s;
     }
 
     // --- G-force drawing ---
@@ -472,7 +474,7 @@
 
         // Boost
         if (d.turbo > 0) {
-            boostEl.textContent = 'BOOST ' + d.turbo.toFixed(2);
+            boostEl.textContent = 'НАДДУВ ' + d.turbo.toFixed(2);
         } else {
             boostEl.textContent = '';
         }
@@ -531,10 +533,10 @@
 
         // Tire slip warnings
         if (d.lockup) {
-            slipWarn.textContent = 'LOCKUP!';
+            slipWarn.textContent = 'БЛОКУВАННЯ!';
             slipWarn.className = 'slip-warn lockup';
         } else if (d.wheelspin) {
-            slipWarn.textContent = 'WHEELSPIN!';
+            slipWarn.textContent = 'ПРОБУКСОВКА!';
             slipWarn.className = 'slip-warn wheelspin';
         } else {
             slipWarn.textContent = '';
@@ -544,7 +546,7 @@
         // Fuel prediction
         if (d.fuel_laps && d.fuel_laps > 0) {
             var fl = d.fuel_laps;
-            fuelLapsEl.textContent = fl.toFixed(1) + ' laps left';
+            fuelLapsEl.textContent = fl.toFixed(1) + ' кіл залиш.';
             fuelLapsEl.className = fl < 3 ? 'fuel-laps critical' : 'fuel-laps';
         } else {
             fuelLapsEl.textContent = '';
@@ -612,9 +614,9 @@
 
                 // Big brake overlay
                 if (c.tip_type === 'brake_urgent') {
-                    showBrakeAlert('BRAKE NOW!', 'warn');
+                    showBrakeAlert('ГАЛЬМУЙ ЗАРАЗ!', 'warn');
                 } else if (c.tip_type === 'brake') {
-                    showBrakeAlert('BRAKE LATER', 'early');
+                    showBrakeAlert('ГАЛЬМУЙ ПІЗНІШЕ', 'early');
                 }
             }
 
@@ -649,20 +651,20 @@
 
             // Demo recording state from server
             if (c.recording_demo && !demoRecording) {
-                demoBtn.textContent = '\u25CF REC...';
+                demoBtn.textContent = '\u25CF ЗАПИС...';
                 demoBtn.classList.add('recording');
                 demoRecording = true;
             } else if (!c.recording_demo && demoRecording) {
-                demoBtn.textContent = 'REC DEMO';
+                demoBtn.textContent = 'ЗАП ДЕМО';
                 demoBtn.classList.remove('recording');
                 demoRecording = false;
             }
 
             // Status
             if (!c.has_reference) {
-                coachStatus.textContent = 'Recording reference lap...';
+                coachStatus.textContent = 'Запис еталонного кола...';
             } else {
-                coachStatus.textContent = 'Comparing to best lap';
+                coachStatus.textContent = 'Порівняння з найкращим колом';
             }
 
             // Cache all_laps when present
@@ -698,12 +700,12 @@
 
             if (pit.fuel_per_lap > 0 && pit.pit_lap > 0) {
                 var lapsUntilPit = pit.pit_lap - d.lap;
-                pitInfoEl.innerHTML = 'PIT LAP <span class="pit-lap-num">' + pit.pit_lap + '</span>';
+                pitInfoEl.innerHTML = 'ПІТ КОЛО <span class="pit-lap-num">' + pit.pit_lap + '</span>';
 
                 // Show alert when on the pit lap or 1 lap before
                 if (lapsUntilPit <= 1 && lapsUntilPit >= 0) {
                     if (!alertPit.classList.contains('visible')) {
-                        alertPit.innerHTML = '<div class="pit-triangle">\u26A0\uFE0F</div><div class="pit-alert-text">BOX BOX BOX</div>';
+                        alertPit.innerHTML = '<div class="pit-triangle">\u26A0\uFE0F</div><div class="pit-alert-text">БОКС БОКС БОКС</div>';
                         alertPit.classList.add('visible');
                         dashboard.className = 'dashboard glow-pit';
                         if (pitAlertTimeout) clearTimeout(pitAlertTimeout);
@@ -716,7 +718,7 @@
                     }
                 }
             } else if (pit.fuel_per_lap > 0) {
-                pitInfoEl.innerHTML = '<span class="pit-ok">no pit needed</span>';
+                pitInfoEl.innerHTML = '<span class="pit-ok">піт не потрібен</span>';
             } else {
                 pitInfoEl.innerHTML = '';
             }
