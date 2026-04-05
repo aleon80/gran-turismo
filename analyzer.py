@@ -3,6 +3,7 @@
 import math
 
 NUM_ZONES = 20  # divide track into this many analysis zones
+CORNER_SPEED_DROP = 20  # km/h speed drop to detect a corner
 SPEED_LOSS_THRESHOLD = 5  # km/h slower than reference to flag
 BRAKE_EARLY_DIST = 12  # meters earlier braking to flag
 TIME_LOSS_THRESHOLD = 0.1  # seconds lost to flag a zone
@@ -38,6 +39,59 @@ def _zone_avg(samples, start, end, key):
     return sum(vals) / len(vals) if vals else 0
 
 
+def _find_corners(ref_samples, num_zones, ref_dists):
+    """Detect which zones contain corners (significant speed drops).
+
+    Returns dict: zone_index -> corner_number (1-based).
+    """
+    total_dist = ref_dists[-1] if ref_dists else 0
+    if total_dist < 100:
+        return {}
+
+    zone_size = len(ref_samples) / num_zones
+
+    # Find min speed per zone
+    zone_min_speed = {}
+    zone_max_speed = {}
+    for z in range(num_zones):
+        rs = int(z * zone_size)
+        re = int((z + 1) * zone_size)
+        speeds = [ref_samples[i]['speed'] for i in range(rs, min(re, len(ref_samples)))]
+        if speeds:
+            zone_min_speed[z] = min(speeds)
+            zone_max_speed[z] = max(speeds)
+
+    # A zone is a "corner" if speed drops significantly
+    corners = {}
+    corner_num = 0
+    prev_was_corner = False
+    for z in range(num_zones):
+        mn = zone_min_speed.get(z, 0)
+        mx = zone_max_speed.get(z, 0)
+        is_corner = (mx - mn) > CORNER_SPEED_DROP or mn < 80
+        if is_corner and not prev_was_corner:
+            corner_num += 1
+            corners[z] = corner_num
+            prev_was_corner = True
+        elif is_corner:
+            corners[z] = corner_num  # same corner continues
+            prev_was_corner = True
+        else:
+            prev_was_corner = False
+
+    return corners
+
+
+def _zone_label(zone_idx, corners, ref_dists, num_zones, total_dist):
+    """Create human-readable zone label."""
+    if zone_idx in corners:
+        return 'Пов.' + str(corners[zone_idx])
+
+    # Straight zone — show distance from start
+    dist_at_zone = total_dist * zone_idx / num_zones
+    return str(int(dist_at_zone)) + 'м'
+
+
 def analyze_lap(lap_samples, ref_samples, ref_time_ms):
     """Compare a completed lap to reference. Returns list of zone analyses.
 
@@ -60,6 +114,9 @@ def analyze_lap(lap_samples, ref_samples, ref_time_ms):
 
     if ref_total < 100 or lap_total < 100:
         return []
+
+    # Detect corners for labeling
+    corners = _find_corners(ref_samples, NUM_ZONES, ref_dists)
 
     # Build zones from reference
     zone_size = ref_total / NUM_ZONES
@@ -215,8 +272,10 @@ def analyze_lap(lap_samples, ref_samples, ref_time_ms):
 
         # Only include zones with significant time loss or errors
         if abs(time_delta) > TIME_LOSS_THRESHOLD or errors:
+            label = _zone_label(z, corners, ref_dists, NUM_ZONES, ref_total)
             results.append({
                 'zone': z + 1,
+                'label': label,
                 'x': round(mid_ref['x'], 1),
                 'z': round(mid_ref['z'], 1),
                 'time_delta': round(time_delta, 3),
@@ -240,11 +299,13 @@ def summarize_lap(analysis):
     improvements = []
 
     for z in analysis:
-        label = 'T' + str(z['zone'])
+        label = z.get('label', str(z['zone']))
         if z['time_delta'] > TIME_LOSS_THRESHOLD:
             for err in z['errors']:
                 top_errors.append({
                     'zone': label,
+                    'x': z['x'],
+                    'z': z['z'],
                     'loss': round(z['time_delta'], 2),
                     'type': err['type'],
                     'detail': err['detail'],

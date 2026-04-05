@@ -473,6 +473,33 @@
             mapCtx.stroke();
         }
 
+        // Draw error zones from last lap report
+        if (cachedReports.length > 0) {
+            var lastReport = cachedReports[cachedReports.length - 1];
+            var errs = lastReport.summary ? lastReport.summary.top_errors : [];
+            for (var ei = 0; ei < errs.length; ei++) {
+                var ez = errs[ei];
+                if (ez.x && ez.z) {
+                    var ex = tx(ez.x);
+                    var ey = tz(ez.z);
+                    // Red pulsing circle for problem zones
+                    mapCtx.beginPath();
+                    mapCtx.arc(ex, ey, 8, 0, Math.PI * 2);
+                    mapCtx.fillStyle = 'rgba(255, 50, 50, 0.3)';
+                    mapCtx.fill();
+                    mapCtx.beginPath();
+                    mapCtx.arc(ex, ey, 4, 0, Math.PI * 2);
+                    mapCtx.fillStyle = 'rgba(255, 80, 80, 0.7)';
+                    mapCtx.fill();
+                    // Label
+                    mapCtx.fillStyle = '#ff8888';
+                    mapCtx.font = '7px sans-serif';
+                    mapCtx.textAlign = 'center';
+                    mapCtx.fillText(ez.zone, ex, ey - 10);
+                }
+            }
+        }
+
         // Draw car position
         if (curPos) {
             var cx = tx(curPos[0]);
